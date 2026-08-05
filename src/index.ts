@@ -1,17 +1,24 @@
 /**
- * token-bucket-rate-limiter — token-bucket rate limiting for Node.js and edge runtimes.
+ * token-bucket-rate-limiter — token-bucket rate limiting for Node.js,
+ * browsers, and edge runtimes (zero runtime dependencies).
  *
  * Two backends:
  *
  * 1. **In-memory token bucket** (default, zero configuration) — synchronous,
  *    per-process. Perfect for single-instance deployments, dev, and tests.
- * 2. **Upstash Redis** (distributed) — configure once with {@link configureRedis}.
- *    Suitable for multi-instance deployments (Vercel, Lambda, K8s) where
- *    per-process buckets would drift out of sync.
+ * 2. **Upstash Redis** (distributed, optional) — configure once with
+ *    {@link configureRedis}. Suitable for multi-instance deployments
+ *    (Vercel, Lambda, K8s) where per-process buckets would drift out of
+ *    sync.
  *
- * When Redis is configured, the async checks route to it and fall back to the
- * in-memory bucket if Redis is unreachable (fail-open, so a Redis outage never
- * blocks legitimate traffic).
+ * The Upstash packages are **optional peer dependencies** — they are only
+ * loaded (dynamically) when you call {@link configureRedis}. The package
+ * itself has no runtime dependencies: the in-memory backend works anywhere,
+ * including browsers.
+ *
+ * When Redis is configured, the async checks route to it and fall back to
+ * the in-memory bucket if Redis is unreachable (fail-open, so a Redis
+ * outage never blocks legitimate traffic).
  *
  * @example
  * import { configureRedis, checkRateLimit } from 'token-bucket-rate-limiter';
@@ -20,11 +27,14 @@
  * const { allowed, remaining, resetMs } = checkRateLimit('user:42', 10, 60_000);
  *
  * // Distributed (call once at startup):
- * configureRedis({ url: process.env.UPSTASH_REDIS_URL, token: process.env.UPSTASH_REDIS_TOKEN });
+ * await configureRedis({
+ *   url: process.env.UPSTASH_REDIS_URL,
+ *   token: process.env.UPSTASH_REDIS_TOKEN,
+ * });
  */
 
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
+import type { Ratelimit } from '@upstash/ratelimit';
+import type { Redis } from '@upstash/redis';
 
 /** The decision returned by every rate-limit check. */
 export interface RateLimitResult {
@@ -53,24 +63,32 @@ const HEADER_REMAINING = 'X-RateLimit-Remaining';
 const HEADER_RESET = 'X-RateLimit-Reset';
 
 let redis: Redis | null = null;
-const limiterCache = new Map<string, Ratelimit>();
+let limiterCache = new Map<string, Ratelimit>();
 
 /**
  * Configures the distributed rate-limit backend backed by Upstash Redis.
  *
  * Safe to call more than once (e.g. in tests); each call replaces the
- * previous configuration.
+ * previous configuration. The `@upstash/redis` and `@upstash/ratelimit`
+ * packages are loaded lazily on the first call, so the rest of the library
+ * works without them installed.
  *
  * @param config - The Redis connection details.
- * @throws {Error} If the URL or token is missing or blank.
+ * @throws {Error} If the URL or token is missing or blank, or the optional
+ * Upstash packages are not installed.
  */
-export function configureRedis(config: RedisConfig): void {
+export async function configureRedis(config: RedisConfig): Promise<void> {
   if (!config.url || !config.token) {
     throw new Error('configureRedis requires both a url and a token');
   }
 
+  // Lazy import keeps the in-memory path dependency-free. This only runs
+  // here, so bundlers and runtimes that never call configureRedis are
+  // never forced to resolve the Upstash package.
+  const { Redis } = await import('@upstash/redis');
+
   redis = new Redis({ url: config.url, token: config.token });
-  limiterCache.clear();
+  limiterCache = new Map<string, Ratelimit>();
 }
 
 /**
@@ -81,13 +99,14 @@ export function configureRedis(config: RedisConfig): void {
  * Returns null when Redis is not configured (caller falls back to
  * the in-memory bucket).
  */
-function getLimiter(maxTokens: number, windowMs: number): Ratelimit | null {
+async function getLimiter(maxTokens: number, windowMs: number): Promise<Ratelimit | null> {
   if (!redis) return null;
 
   const cacheKey = `${maxTokens}:${windowMs}`;
   const cached = limiterCache.get(cacheKey);
   if (cached) return cached;
 
+  const { Ratelimit } = await import('@upstash/ratelimit');
   const limiter = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(maxTokens, `${windowMs} ms`),
@@ -102,10 +121,11 @@ function getLimiter(maxTokens: number, windowMs: number): Ratelimit | null {
 
 const memoryBuckets = new Map<string, { tokens: number; resetAt: number }>();
 
-function getMemoryBucket(key: string, maxTokens: number, windowMs: number): {
-  tokens: number;
-  resetAt: number;
-} {
+function getMemoryBucket(
+  key: string,
+  maxTokens: number,
+  windowMs: number,
+): { tokens: number; resetAt: number } {
   const now = Date.now();
   const existing = memoryBuckets.get(key);
   if (existing && existing.resetAt > now) {
@@ -144,7 +164,8 @@ function checkRateLimitInMemory(
 
 /**
  * Checks whether the given key has remaining request budget using the
- * in-memory token bucket. Synchronous, no I/O — usable anywhere.
+ * in-memory token bucket. Synchronous, no I/O — usable anywhere,
+ * including browsers.
  *
  * @param key - Unique identifier for the client (e.g. `route:userId` or `route:ip`).
  * @param maxTokens - Maximum burst capacity (default 10).
@@ -181,7 +202,18 @@ export async function checkRateLimitAsync(
   maxTokens = 10,
   windowMs = 60_000,
 ): Promise<RateLimitResult> {
-  const limiter = getLimiter(maxTokens, windowMs);
+  let limiter: Ratelimit | null = null;
+  try {
+    limiter = await getLimiter(maxTokens, windowMs);
+  } catch (error) {
+    // Optional Upstash packages missing or failed to load — fall back to
+    // the in-memory bucket rather than crashing the caller.
+    console.error(
+      '[token-bucket-rate-limiter] could not load the Redis limiter, falling back to memory:',
+      error,
+    );
+    return checkRateLimitInMemory(key, maxTokens, windowMs);
+  }
 
   // Fall back to in-memory when Redis is not configured.
   if (!limiter) {

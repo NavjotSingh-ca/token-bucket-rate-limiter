@@ -41,22 +41,28 @@
     "url": "https://github.com/NavjotSingh-ca/token-bucket-rate-limiter/issues"
   },
   "homepage": "https://github.com/NavjotSingh-ca/token-bucket-rate-limiter#readme",
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepare": "npm run build",
-    "prepublishOnly": "npm run build && npm test"
+    "prepare": "npm run build"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0"
   },
+  "peerDependenciesMeta": {
+    "@upstash/ratelimit": {
+      "optional": true
+    },
+    "@upstash/redis": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "typescript": "^5.8.0",
     "vitest": "^4.1.8"
   }

@@ -89,9 +89,9 @@ describe('checkRateLimitAsync (fallback behavior)', () => {
     expect(denied.allowed).toBe(false);
   });
 
-  it('throws when configureRedis is called without credentials', () => {
-    expect(() => configureRedis({ url: '', token: 'x' })).toThrow(/url and a token/i);
-    expect(() => configureRedis({ url: 'https://x.upstash.io', token: '' })).toThrow(
+  it('throws when configureRedis is called without credentials', async () => {
+    await expect(configureRedis({ url: '', token: 'x' })).rejects.toThrow(/url and a token/i);
+    await expect(configureRedis({ url: 'https://x.upstash.io', token: '' })).rejects.toThrow(
       /url and a token/i,
     );
   });
@@ -101,7 +101,7 @@ describe('checkRateLimitAsync (fallback behavior)', () => {
     // leak into the static instance used by the rest of this file.
     vi.resetModules();
     const fresh = await import('./index.js');
-    fresh.configureRedis({ url: 'http://127.0.0.1:1', token: 'invalid-token' });
+    await fresh.configureRedis({ url: 'http://127.0.0.1:1', token: 'invalid-token' });
     const key = `test-unreachable:${Date.now()}`;
     const result = await fresh.checkRateLimitAsync(key, 1, 60_000);
     expect(result.allowed).toBe(true);

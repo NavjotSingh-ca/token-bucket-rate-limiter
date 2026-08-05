@@ -1,17 +1,17 @@
-# token-bucket-rate-limiter
+﻿# token-bucket-rate-limiter
 
-Token-bucket rate limiting for Node.js and edge runtimes. Zero-config in-memory backend that Just Works, with an optional distributed Upstash Redis backend for multi-instance deployments — plus fetch-friendly helpers for any request framework.
+Token-bucket rate limiting for **Node.js, browsers, and edge runtimes** — zero runtime dependencies. Zero-config in-memory backend that Just Works, with an **optional** distributed Upstash Redis backend for multi-instance deployments — plus fetch-friendly helpers for any request framework.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Features
 
-- **Zero-config start** — `checkRateLimit()` works immediately with an in-memory token bucket. No Redis, no env vars.
+- **Zero-config start** — `checkRateLimit()` works immediately with an in-memory token bucket. No Redis, no env vars, no dependencies.
+- **Zero runtime dependencies** — the Upstash packages are *optional peer dependencies*; they are only loaded if you call `configureRedis()`. The in-memory path works in any environment, including browsers.
 - **Distributed mode** — one call to `configureRedis()` switches async checks to Upstash Redis (ideal for Vercel, Lambda, K8s).
 - **Fail-open by design** — if Redis is unreachable, traffic is never blocked; it degrades to the in-memory bucket.
 - **Fetch-friendly** — `withRateLimit()` wraps any `Request`/`Response` handler and emits standard `X-RateLimit-*` + `Retry-After` headers.
 - **Per-window limiter caching** — `maxTokens`/`windowMs` parameters are honored in distributed mode (no more "10 per 60s" being silently hardcoded).
-- **Zero native dependencies** — Upstash clients are pure HTTP; nothing to compile.
 
 ## Install
 
@@ -19,7 +19,13 @@ Token-bucket rate limiting for Node.js and edge runtimes. Zero-config in-memory 
 npm install token-bucket-rate-limiter
 ```
 
-Requires Node.js 18+ (ESM). Works in any runtime with the fetch API (Node, Deno, Bun, Workers).
+The Upstash backend is optional — install these only if you use `configureRedis()`:
+
+```bash
+npm install @upstash/redis @upstash/ratelimit
+```
+
+Requires Node.js 18+ (ESM). Works in any runtime with the fetch API (Node, Deno, Bun, Workers) and in browsers (in-memory mode).
 
 ## Usage
 
@@ -36,13 +42,13 @@ if (!allowed) {
 }
 ```
 
-### Distributed (Upstash Redis)
+### Distributed (Upstash Redis, optional)
 
 ```ts
 import { configureRedis, checkRateLimitAsync } from 'token-bucket-rate-limiter';
 
 // Call once at startup (or module scope):
-configureRedis({
+await configureRedis({
   url: process.env.UPSTASH_REDIS_URL!,
   token: process.env.UPSTASH_REDIS_TOKEN!,
 });
@@ -85,9 +91,9 @@ Synchronous in-memory token-bucket check. Never throws (fail-open on internal er
 
 Async check. Uses the distributed backend when configured, otherwise the in-memory bucket. Fails open if Redis errors.
 
-### `configureRedis(config: { url, token, prefix? }): void`
+### `configureRedis(config: { url, token, prefix? }): Promise<void>`
 
-Enables the distributed backend. Throws if `url` or `token` is missing.
+Enables the distributed backend. Loads the Upstash packages lazily and throws if `url` or `token` is missing, or if the optional packages are not installed.
 
 ### `addRateLimitHeaders(headers, result): void`
 
