@@ -1,0 +1,48 @@
+{
+  "name": "token-bucket-rate-limiter",
+  "version": "1.0.0",
+  "description": "Token-bucket rate limiting for Node.js and edge runtimes — zero-config in-memory backend plus optional distributed Upstash Redis backend, with fetch-friendly headers and middleware",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "rate-limit",
+    "rate-limiting",
+    "token-bucket",
+    "redis",
+    "upstash",
+    "429",
+    "api",
+    "middleware"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.8"
+  }
+}
