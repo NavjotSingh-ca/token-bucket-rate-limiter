@@ -9,7 +9,8 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "files": [
@@ -17,6 +18,7 @@
     "README.md",
     "LICENSE"
   ],
+  "sideEffects": false,
   "engines": {
     "node": ">=18"
   },
@@ -30,10 +32,23 @@
     "api",
     "middleware"
   ],
+  "author": "Navjot Singh",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NavjotSingh-ca/token-bucket-rate-limiter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NavjotSingh-ca/token-bucket-rate-limiter/issues"
+  },
+  "homepage": "https://github.com/NavjotSingh-ca/token-bucket-rate-limiter#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
